@@ -1,6 +1,6 @@
 -- ============================================
 -- GAME INITIALIZATION SEQUENCE
--- This script runs FIRST and loads all systems in the correct order
+-- This script monitors other systems and ensures proper initialization order
 -- ============================================
 
 print("\n" .. string.rep("=", 50))
@@ -9,40 +9,57 @@ print(string.rep("=", 50) .. "\n")
 
 local initStartTime = tick()
 
--- ============================================
--- STEP 1: BASE GAME SETUP (World creation)
--- ============================================
-print("📍 STEP 1/4: Setting up base game world...")
-require(script.Parent:WaitForChild("BaseGame"))
-print("✅ Base game ready in " .. string.format("%.2f", tick() - initStartTime) .. "s\n")
+-- Wait for RemoteEvents to be created by EconomySystem
+print("📍 STEP 1/2: Waiting for RemoteEvents...")
+local remoteEventsFolder = game:GetService("ReplicatedStorage"):WaitForChild("RemoteEvents", 10)
+if not remoteEventsFolder then
+	warn("❌ RemoteEvents folder not found after 10 seconds!")
+else
+	print("✅ RemoteEvents ready")
+end
 
-wait(0.3)
+wait(1)
 
--- ============================================
--- STEP 2: ECONOMY SYSTEM (Currency & RemoteEvents)
--- ============================================
-print("📍 STEP 2/4: Initializing economy system...")
-require(script.Parent:WaitForChild("EconomySystem"))
-print("✅ Economy system ready in " .. string.format("%.2f", tick() - initStartTime) .. "s\n")
-
-wait(0.3)
-
--- ============================================
--- STEP 3: GAME MANAGER (Villages, houses, shops)
--- ============================================
-print("📍 STEP 3/4: Building villages and game content...")
-require(script.Parent:WaitForChild("GameManager"))
-print("✅ Game manager ready in " .. string.format("%.2f", tick() - initStartTime) .. "s\n")
-
-wait(0.3)
+-- Wait for Village to be created by GameManager
+print("📍 STEP 2/2: Waiting for Village...")
+local village = workspace:WaitForChild("Village", 10)
+if not village then
+	warn("❌ Village folder not found after 10 seconds!")
+else
+	print("✅ Village ready")
+end
 
 -- ============================================
--- STEP 4: ADDITIONAL SYSTEMS (NPCs, Houses, etc)
+-- SETUP SHOP CLICK HANDLERS
 -- ============================================
-print("📍 STEP 4/4: Loading additional systems...")
-require(script.Parent:WaitForChild("HouseInteriorManager"))
-require(script.Parent:WaitForChild("NPCSystem"))
-print("✅ All systems ready in " .. string.format("%.2f", tick() - initStartTime) .. "s\n")
+print("\n📍 Setting up shop interactions...")
+
+local shopInteractionEvent = remoteEventsFolder and remoteEventsFolder:FindFirstChild("ShopInteraction")
+if not shopInteractionEvent then
+	warn("⚠️  ShopInteraction event not found")
+else
+	print("✅ Found ShopInteraction event")
+end
+
+-- Wait for Village to exist, then find shops
+if village then
+	local shopNames = {"GeneralStore", "WeaponShop", "FoodStore", "ClothingShop"}
+	for _, shopName in ipairs(shopNames) do
+		local shop = village:FindFirstChild(shopName)
+		if shop and shop:FindFirstChild("ClickDetector") then
+			shop.ClickDetector.MouseClick:Connect(function(player)
+				print("🛍️  Player " .. player.Name .. " clicked " .. shopName)
+				if shopInteractionEvent then
+					shopInteractionEvent:FireClient(player, shopName)
+					print("📤 Sent ShopInteraction event to " .. player.Name)
+				else
+					warn("❌ ShopInteraction event not found!")
+				end
+			end)
+			print("✅ Added click handler for " .. shopName)
+		end
+	end
+end
 
 -- ============================================
 -- INITIALIZATION COMPLETE
